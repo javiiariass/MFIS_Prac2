@@ -1,0 +1,293 @@
+model PetSocialNetwork
+
+enum TipoGusto {
+  JUEGOS,
+  PASEOS,
+  DORMIR,
+  JUGUETES,
+  CARICIAS,
+  COMIDA,
+  AGUA,
+  BANYOS
+}
+
+class Date
+attributes
+  dia : Integer
+  mes : Integer
+  anyo : Integer
+end
+	
+class Usuario
+attributes
+  id : Integer
+  nombreUsuario : String
+  Sexo : String
+end
+
+class Propietario < Usuario
+attributes
+  nombre : String
+  dni : String
+  nFotosDiarias : Integer
+end
+
+class Mascota < Usuario
+attributes
+  nombre : String
+  especie : String
+  raza : String
+  fechaNacimiento : Date
+  salud : String
+  comportamientoAgresivo : Boolean
+  estadoPerfil : String
+  vacunasAlDia : Boolean
+  gustos : Set(TipoGusto) -- coleccion de gustos
+
+operations
+  esCompatible(otraMascota : Mascota) : Boolean =
+  -- Cogemos los gustos que tienen en comun del enum
+  -- y si coindide en al menos 2 -> true
+  self.gustos-> intersection(otraMascota.gustos)->size() > 1
+  inscribirseEvento(eventoNuevo: Evento) : Boolean
+end
+
+class Vacuna
+attributes
+  idVacuna : Integer
+  edadToma : Date
+end
+
+class Producto
+attributes
+  idProducto : Integer
+  nombre : String
+  foto : String
+  esAprobadoVeterinariamente : Boolean
+  categoriaEspecie : String
+  numRecomendaciones : Integer
+end
+
+class Veterinario
+attributes
+  idVeterinario : Integer
+  nombre : String
+  idCertificacion : String
+operations
+  certificarProducto (producto : Producto)
+end
+
+class Publicacion
+attributes
+  idPublicacion : Integer
+  fechaPublicacion : Date
+  numMeGusta : Integer
+operations
+  publicarComentario (comentario:Comentario) : Boolean 
+  --self.comentario->includes(comentario)
+end
+
+class Comentario
+attributes
+  idComentario : Integer
+  texto : String
+  numMeGusta : Integer
+  idUsuario : Integer
+  fechaComentario : Date
+operations
+  borrarComentario()
+end
+
+class Evento < Publicacion
+attributes
+  estadoConfirmacion : Boolean
+  nParticipantes : Integer
+  fechaEvento : Date
+  recordatorios : String
+  ubicacion : String
+operations
+  cancelarEvento () 
+  tiempoHastaInicio() : Integer -- = (self.fechaEvento.anyo * 365 + self.fechaEvento.mes * 30 + self.fechaEvento.dia) - (Date::fechaActual.anyo * 365 + Date::fechaActual.mes * 30 + Date::fechaActual.dia)
+end
+
+class Anuncio < Publicacion
+attributes
+  enlace : String
+end
+
+class AnuncioAdopcion < Anuncio
+end
+
+class AnuncioProducto < Anuncio
+end
+
+association Tiene between
+  Propietario [1..*] role propietario
+  Mascota [1..4] role mascota
+end
+
+association RegistroVacunacion between
+  Mascota [0..*] role mascota
+  Vacuna [0..*] role vacuna
+end
+
+association Amigos between
+  Mascota [0..*] role mascota1
+  Mascota [0..*] role mascota2
+end
+
+association Publicaciones between
+  Mascota [1] role mascota
+  Publicacion [0..*] role publicacion
+end
+
+association Comentarios between
+  Publicacion [1] role publicacion
+  Comentario [0..*] role comentario
+end
+
+association Etiquetas between
+  Publicacion [0..*] role publicacionEtiquetada
+  Usuario [0..*] role usuario
+end
+
+association ComprobadoPor between
+  Producto [0..*] role producto
+  Veterinario [0..*] role veterinario
+end
+
+association InscripcionEvento between
+  Evento [0..*] role evento
+  Mascota [0..*] role mascotaInscrito
+end
+
+association MascotaEnAdopcion between
+  AnuncioAdopcion [0..1] role anuncioAdopcion
+  Mascota [1] role mascotaEnAdopcion
+end
+
+association ProductoAnunciado between
+  AnuncioProducto [0..1] role anuncioProducto
+  Producto [1] role producto
+end
+
+
+constraints -------------------------------------------------------------------
+context Propietario
+inv maxMascotas: self.mascota->size() <= 4
+
+context Mascota inv esAmigo:
+self.mascota2->forAll(m: Mascota | m.oclIsUndefined() = false implies self.esCompatible(m))
+
+context AnuncioProducto
+inv productoAnunciadoVerificado:
+self.producto.esAprobadoVeterinariamente = true
+
+context AnuncioProducto 
+inv ProductoEspecifico: 
+self.producto.categoriaEspecie = self.mascota.especie 
+or self.producto.categoriaEspecie = 'todasLasEspecies'
+
+context Propietario 
+inv maxFotosDiarias:
+  self.nFotosDiarias <= 3
+
+context Mascota
+inv suspensionAgresivo:
+  self.comportamientoAgresivo = true implies self.estadoPerfil = 'Suspendido'
+
+context Mascota
+inv vacunasParaAdopcion: self.anuncioAdopcion->notEmpty() implies self.vacunasAlDia=true 
+
+context Mascota
+inv noEventosSimultaneos: self.evento->forAll(e1, e2 | e1 <> e2 implies e1.fechaEvento <> e2.fechaEvento)
+
+context Evento
+inv eventoConfirmado:  estadoConfirmacion = true implies self.nParticipantes >= 6
+
+-- Si la resta entre las fechas es mayor o igual que 6 dias 
+-- y los participantes son menores -> se cancela
+context Evento
+inv eventosuspendido: 
+  -- Utilizamos directamente los valores de la fecha fija: 3/4/2025
+  (self.fechaEvento.anyo * 365 + self.fechaEvento.mes * 30 + self.fechaEvento.dia) 
+  - (2025 * 365 + 4 * 30 + 3) < 7 -- Comparamos con una fecha fija que debe ser modificada aqui 
+  and self.nParticipantes <= 6 implies estadoConfirmacion = false
+
+context Propietario
+inv unicaCuentaActiva: 
+  Propietario.allInstances()->forAll(u1, u2 | u1 <> u2 implies u1.dni <> u2.dni)
+
+context Mascota
+inv noEventosSiSuspendida: 
+self.estadoPerfil='Suspendido' implies self.evento->isEmpty()=true
+
+context Producto
+inv certificacionMinVeterinarios: 
+((self.numRecomendaciones >= 3) implies ((self.esAprobadoVeterinariamente = true) and (self.veterinario->size() >= self.numRecomendaciones)))
+
+context Mascota
+inv noAmistadConsigoMismo: 
+not self.mascota1->includes(self)
+
+context AnuncioAdopcion
+inv noAdopcionSiSuspendida:
+mascotaEnAdopcion.estadoPerfil <> 'Suspendido'
+
+context Evento
+inv noSolapamientoUbicacion: 
+Evento.allInstances()->forAll(e1, e2 | e1 <> e2 implies e1.ubicacion <> e2.ubicacion or e1.fechaEvento <> e2.fechaEvento)
+
+context Mascota
+inv gustosMinimos:
+self.gustos -> size >= 3
+
+context Evento
+inv eventoFuturo: 
+self.fechaEvento.anyo > self.fechaPublicacion.anyo or 
+(self.fechaEvento.anyo = self.fechaPublicacion.anyo and self.fechaEvento.mes > self.fechaPublicacion.mes) or 
+(self.fechaEvento.anyo = self.fechaPublicacion.anyo and self.fechaEvento.mes = self.fechaPublicacion.mes and self.fechaEvento.dia >= (self.fechaPublicacion.dia + 7))
+
+
+-- una vez "probado" el producto, lo certifica
+context Veterinario::certificarProducto(producto: Producto) 
+  pre compruebaExistencias: self.producto->exists(p : Producto | p.idProducto = producto.idProducto) = true
+
+  post post1: producto.numRecomendaciones = producto.numRecomendaciones@pre + 1
+
+context Evento::cancelarEvento()
+pre estadoNoConfirmado: not self.estadoConfirmacion
+
+--post eventoEliminado: Evento.allInstances()->excludes(self)
+post eventoEliminado2: self.oclIsUndefined()
+
+context Publicacion::publicarComentario(comentario: Comentario): Boolean
+  -- que exista al menos una publicacion
+  -- la precondicion de que exista un usuario ya está contemplada a la hora de hacer la publicacion 
+  --pre : comentario->notEmpty()
+  -- que la fecha del comentario no sea anterior a la fecha de la publicacion
+  pre fechaValida: self.fechaPublicacion.anyo <= comentario.fechaComentario.anyo
+  pre mascotaExistente: Mascota.allInstances()->exists(m : Mascota | m.id = comentario.idUsuario)
+  pre comentarioNoVacio: comentario.texto.size() > 0
+  post comprobarComentario: self.comentario->includes(comentario)
+  
+  -- que el comentario se haya publicado correctamente
+
+  -- texto e id no pueden estar vacios
+  --post: comentario.texto.size() != 0 and not comentario.idComentario.oclIsUndefined
+
+context Mascota::esCompatible(otraMascota:Mascota) : Boolean
+  -- No calcular la compatibilidad consigo misma  
+  pre noElMismo: otraMascota.id <> self.id
+  -- No calcular compatibilad con especies distintas
+  pre otraEspecie: otraMascota.especie = self.especie
+  -- Ninguna puede estar suspendida
+  pre noSuspendidos: otraMascota.estadoPerfil <> 'Suspendido' and self.estadoPerfil <> 'Suspendido'
+
+
+
+
+context Mascota::inscribirseEvento(eventoNuevo: Evento) : Boolean
+  pre: self.evento->includes(eventoNuevo) = false
+  pre: self.estadoPerfil <> 'Suspendido'
+  post: self.evento->includes(eventoNuevo) = true
