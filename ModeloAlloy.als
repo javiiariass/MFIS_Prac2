@@ -181,10 +181,10 @@ fact UnAnuncioAdopcionPorMascota {
 fact fechaNoNegativa{
   all f :Fecha | f.ValorDias > 0 
 }
+  // Suponemos un valor concreto para la fecha actual
 
 fact valorFechaActual{
-  // Suponemos un valor concreto para la fecha actual
-  fechaActual.ValorDias > 5
+  fechaActual.ValorDias > 4
 }
 
 
@@ -280,7 +280,6 @@ fact ProductoVerificadoPorVeterinarios {
  * Hecho que indica que las mascotas recomendadas del anuncio producto deben ser de la/s especies indicadas por el producto.
  */
 fact ProductoRecomendadoPorMascota {
-
 	all aP: AnuncioProducto | {
 		all m: aP.mascotasRecomendadas | {
 			// La mascota recomendada debe ser la misma especie que el producto
@@ -296,8 +295,8 @@ fact ProductoRecomendadoPorMascota {
 /**
   * Hecho que indica que una mascota puede ,como máximo, hacer 3 publicaciones al día.
   */
-fact MascotaMaxTresPublicacionesPorFecha {
   // Para cada mascota y cada fecha, limitar a máximo 3 publicaciones en esa fecha
+fact MascotaMaxTresPublicacionesPorFecha {
   all m: Mascota | all f: Fecha | 
     #{ p: PublicacionNormal | p in m.publicacionesPropias and p.fechaPublicada = f } <= 3
 }
@@ -330,35 +329,17 @@ fact MascotaNoPuedeApuntarseDosVeces {
 
 
 //***************** Restriccion 9 *****************
-//No consideramos esta restriccion, tenemos en cuenta cuando un evento se suspende
-// fact EventoConMascotas {
-//   // Para cada evento, debe haber al menos 6 mascotas apuntadas
-//   all e: Evento | (diasRestantes[e.fechaEvento] <=7 and #e.participantes > 6) implies #(e.estadoEvento)>0
- 
-// }
-
 
 //***************** Restriccion 10 *****************
 
 // Los eventos no pueden realizarse si  no hay 6 mascotas apuntadas
 fact eventoSuspendido{
   all e: Evento | {
-    (diasRestantes[e.fechaEvento] <= 7 and #{e.participantes}<=6) implies #(e.estadoEvento)>0
+    (diasRestantes[e.fechaEvento] <= 7 and #{e.participantes}<=6) 
+      implies #(e.estadoEvento)>0
   } 
 }
 
-
-
-pred dsd{
-
-  #Evento > 4
-  fechaActual.ValorDias = 100  
-  one e: Evento | #e.estadoEvento = 0
-}
-
-run dsd for 15 but 8 int
-
-//run dsd for 35 but 16 Mascota, 10 Fecha, 8 Ubicacion
 
 //***************** Restriccion 11 *****************
 
@@ -394,7 +375,7 @@ fact MascotaNoAmigos {
  */
 fact AnuncioAgresivo {
 	// No puede haber anuncios de adopción que tengan mascotas con comportamiento agresivo
-  	all a:AnuncioAdopcion | no a.mascotaAdopcion.comportamiento 
+  all a:AnuncioAdopcion | no a.mascotaAdopcion.comportamiento 
 }
 
 // ***************** Restriccion 16 *****************
@@ -481,10 +462,18 @@ pred MascotaMaxTresPublicacionesPorFechaPred{
 }
 //run MascotaMaxTresPublicacionesPorFechaPred for 15
 
+pred numMinimoEventos{
 
+  #Evento > 4
+  fechaActual.ValorDias = 100  
+  one e: Evento | #e.estadoEvento = 0
+}
+
+run numMinimoEventos for 15 but 8 int
 
 // ************************************************ asserts ***********************************************
 assert MascotaMaxTresPublicacionesPorFechaAssert {
+  #PublicacionNormal =4
 	 
   //fechaActual.ValorDias = 100
   all m: Mascota| all f: Fecha | 
