@@ -1,10 +1,3 @@
-
-abstract sig Usuario {}
-sig Vacuna {}
-sig Propietario extends Usuario {
-	
-dueño : some Mascota
-}
 enum TipoGusto {
   JUEGOS,
   PASEOS,
@@ -31,6 +24,29 @@ enum Especie {
 }
 
 /**
+  * Representa a la clase abstracta Usuario.
+  */
+abstract sig Usuario {
+  nombre : one Nombre,
+  
+}
+
+sig Propietario extends Usuario {
+  dueño : some Mascota
+}
+
+sig Mascota extends Usuario {
+	mascota : some Propietario,
+	registroVacunacion : set Vacuna,
+	amigos : set Mascota,
+	gustos : some TipoGusto,
+	vacunasTodas : lone vacunasAlDia,
+	comportamiento : lone ComportamientoAgresivo,
+	especieMascota : one Especie,
+	publicacionesPropias : set PublicacionNormal,
+}
+
+/**
  * Esta firma representa al atributo Booleano "vacunasAlDia" de la mascota.
  * Tendrá una relación con Mascota "lone":
  * Si tiene relación con mascota, significa que la mascota tiene todas 
@@ -40,25 +56,34 @@ enum Especie {
  * tiene todas sus vacunas al día -> no puede publicar anuncios de adopción
  */
 sig vacunasAlDia{
-
+  // representa el atributo booleano "vacunasAlDia" de la mascota
 }
 
-sig Fecha{}
-
-sig Mascota extends Usuario {
-	// relacion para el fact de que una mascota puede tenr mas de un dueño
-	mascota : some Propietario,
-	registroVacunacion : set Vacuna,
-	amigos : set Mascota,
-	gustos : some TipoGusto,
-	vacunasTodas : lone vacunasAlDia,
-	comportamiento : lone ComportamientoAgresivo,
-	especieMascota : one Especie,
-	publicacionesPropias : set PublicacionNormal,
-	
+sig Nombre{
+  // representa el nombre del usuario
+  // necesaria para fact NombreUnico
 }
 
-sig ComportamientoAgresivo{}
+sig Vacuna {
+  // representa objeto vacuna
+}
+
+
+sig Fecha{
+  // Representamos las fechas como un número entero
+  ValorDias:one Int
+}
+
+one sig fechaActual {
+  // Representamos la fecha actual para poder 
+  // realizar comparaciones con otras fechas
+  ValorDias: one Int
+}
+
+one sig ComportamientoAgresivo{
+  // Representa el comportamiento agresivo de una mascota
+  // necesaria para restricciones de comportamiento en mascotas
+}
 
 
 // Un producto puede ir destinado a una o varias especies
@@ -70,17 +95,17 @@ sig Veterinario {
 	comprueba : set Producto
 }
 
-abstract sig Publicacion {
 	//No contemplabamos que una mascota creara un evento o anuncions
 	//entonces lo hemos dividido en dos signaturas
+abstract sig Publicacion {
 	etiquetado : set Usuario,
-	
+  fechaPublicada : one Fecha,
 }
+
 sig PublicacionNormal extends Publicacion {
 	publicador : one Mascota,
-	fechaPublicada : one Fecha,
-	//etiquetados : set Usuario
 }
+
 sig Comentario  {
 	comentario : one Publicacion,
 	autor : one Propietario
@@ -88,11 +113,23 @@ sig Comentario  {
 
 sig Evento extends Publicacion {
 	participantes : set Mascota,
-	creador : one Propietario
+	creador : one Propietario,
+  ubicacion : one Ubicacion,
+  fechaEvento : one Fecha,
+  estadoEvento : lone EventoConfirmado,
+}
+
+sig Ubicacion{
+  // Representa la ubicación de un evento
+  // necesaria para la restricción de eventos
+}
+
+one sig EventoConfirmado{
+  // Representa el estado de confirmación de un evento
 }
 
 sig AnuncioAdopcion extends Publicacion {
-mascotaAdopcion : one Mascota
+  mascotaAdopcion : one Mascota
 }
 
 sig AnuncioProducto extends Publicacion {
@@ -129,7 +166,49 @@ fact publicacionesBidireccionales{
   all p: PublicacionNormal | p in p.publicador.publicacionesPropias
 }
 
+// fact anuncioMascota{
+//   all aP,aP2: AnuncioAdopcion | aP.mascotaAdopcion != aP2.mascotaAdopcion
+// }
 
+fact UnAnuncioAdopcionPorMascota {
+  all m: Mascota | lone a: AnuncioAdopcion | a.mascotaAdopcion = m
+}
+
+// *********************************************** Restricciones para fechas **********************************************
+/**
+  * Hecho que indica que cualquier fecha debe ser positiva.
+  */
+fact fechaNoNegativa{
+  all f :Fecha | f.ValorDias > 0 
+}
+
+fact valorFechaActual{
+  // Suponemos un valor concreto para la fecha actual
+  fechaActual.ValorDias > 5
+}
+
+
+
+fact fechaPublicacionMenorQueFechaActual{
+  all p: Publicacion | p.fechaPublicada.ValorDias <= fechaActual.ValorDias
+}
+
+/**
+  * Función que calcula la diferencia de días entre la fecha actual y una fecha dada.
+  * Devuelve un número entero.
+  */
+fun diasRestantes[f1: Fecha]: Int {
+   f1.ValorDias.minus[fechaActual.ValorDias]
+}
+
+/**
+  * Función que calcula la diferencia de días entre dos fechas.
+  * Devuelve un número entero.
+  */
+fun diferenciaFechas[f1: Fecha, f2: Fecha]: Int {
+  // Devuelve la diferencia entre dos fechas
+  f1.ValorDias.minus[f2.ValorDias]
+}
 
 // ********************************************** Restricciones Generales **********************************************
 
@@ -142,6 +221,7 @@ fact unAnuncioPorProducto{
 	// Si tiene un anuncio, no puede tener más de uno
 	all p: Producto | lone aP: AnuncioProducto | p in aP.productoAnunciado
 }
+
 
 
 
@@ -170,7 +250,9 @@ fun gustosCoincidentes[m1, m2: Mascota]: Int {
   #(m1.gustos & m2.gustos) // & -> intersección entre los conjuntos de gustos
 }
 
-// ***************** Restriccion 3 *****************
+// ***************** Restriccion 3 y 13 *****************
+
+// Por simplificar el modelo en alloy, consideramos que un producto es verificado si ha sido revisado por al menos cuatro veterinarios
 
 /**
  * Función que indica si un producto ha sido verificado.
@@ -208,6 +290,7 @@ fact ProductoRecomendadoPorMascota {
 	} 
 }
 
+
 // ***************** Restriccion 5 *****************
 
 /**
@@ -232,6 +315,57 @@ fact MascotaMaxTresPublicacionesPorFecha {
  */
 fact AnuncioAdopcionConVacunasValidas {
   all aa: AnuncioAdopcion | one aa.mascotaAdopcion.vacunasTodas
+}
+
+
+// ***************** Restriccion 8 *****************
+// Una mascota no se puede apunar a dos evento con la misma fecha
+fact MascotaNoPuedeApuntarseDosVeces {
+  all m: Mascota, e1, e2: Evento | 
+    e1 != e2 and m in e1.participantes and m in e2.participantes implies 
+    e1.fechaEvento.ValorDias != e2.fechaEvento.ValorDias
+}
+
+
+
+
+//***************** Restriccion 9 *****************
+//No consideramos esta restriccion, tenemos en cuenta cuando un evento se suspende
+// fact EventoConMascotas {
+//   // Para cada evento, debe haber al menos 6 mascotas apuntadas
+//   all e: Evento | (diasRestantes[e.fechaEvento] <=7 and #e.participantes > 6) implies #(e.estadoEvento)>0
+ 
+// }
+
+
+//***************** Restriccion 10 *****************
+
+// Los eventos no pueden realizarse si  no hay 6 mascotas apuntadas
+fact eventoSuspendido{
+  all e: Evento | {
+    (diasRestantes[e.fechaEvento] <= 7 and #{e.participantes}<=6) implies #(e.estadoEvento)>0
+  } 
+}
+
+
+
+pred dsd{
+
+  #Evento > 4
+  fechaActual.ValorDias = 100  
+  one e: Evento | #e.estadoEvento = 0
+}
+
+run dsd for 15 but 8 int
+
+//run dsd for 35 but 16 Mascota, 10 Fecha, 8 Ubicacion
+
+//***************** Restriccion 11 *****************
+
+// No puede haber dos usuarios con el mismo nombre
+fact NombreUnico {
+  // No puede haber dos usuarios con el mismo nombre
+  all u1, u2: Usuario | u1 != u2 implies u1.nombre != u2.nombre
 }
 
 // ***************** Restriccion 12 *****************
@@ -263,90 +397,73 @@ fact AnuncioAgresivo {
   	all a:AnuncioAdopcion | no a.mascotaAdopcion.comportamiento 
 }
 
+// ***************** Restriccion 16 *****************
+
+// Dos eventos no pueden tener la misma fecha si estan en la misma ubicacion
+
+fact EventosNoPuedenTenerMismaFecha {
+  all e1, e2: Evento | (e1 != e2 and e1.fechaEvento = e2.fechaEvento) implies ( e1.ubicacion != e2.ubicacion) or 
+   (e1 != e2 and e1.fechaEvento != e2.fechaEvento) implies (e1.ubicacion = e2.ubicacion)
+}
+
+fact EventosNoPuedenTenerMismaFechaYUbicacion {
+  // Dos eventos diferentes no pueden tener al mismo tiempo misma fecha y ubicación
+  all e1, e2: Evento | e1 != e2 implies 
+    (e1.fechaEvento != e2.fechaEvento or e1.ubicacion != e2.ubicacion)
+}
 
 // ***************** Restriccion 17 *****************
 /**
  * Hecho que indica que una mascota debe tener al menos 3 gustos.
  */
 fact CantidadMinimaDeGustosPorMascota {
-all m: Mascota | #m.gustos >= 3
+  all m: Mascota | #m.gustos >= 3
+}
+
+// ***************** Restriccion 18 *****************
+
+// Todas las fechas generadas en el modelo deben ser posteriores a la fechaActual
+/**
+  * Hecho que indica que la fecha de un evento debe ser, al menos, 
+  * 7 días posterior a la fecha de creacion del evento.
+  */
+fact eventoConSemanaDeAnticipacion {
+  all e: Evento | diferenciaFechas[e.fechaEvento, e.fechaPublicada] > 7
 }
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
-
-
+// fact eventoConSemanaDeAnticipacion {
+//   all e: Evento | e.fechaEvento.ValorDias > e.fechaPublicada.ValorDias
+// }
 
 
 
 // ********************************************** Predicados **********************************************
 
+
 pred ProductoVerificadoPorVeterinariosPred {
   #AnuncioProducto > 4
-  some p : Producto | productoVerificadoPorVeterinario[p] > 0
-  some p2 : Producto | productoVerificadoPorVeterinario[p2] = 0	
+  some a :AnuncioProducto| productoVerificadoPorVeterinario[a.productoAnunciado] > 0
+  some a2 :AnuncioProducto | productoVerificadoPorVeterinario[a2.productoAnunciado] = 0
 }
-// run ProductoVerificadoPorVeterinariosPred for 15
-
-
-pred anuncios{
-	// Para cada anuncio de adopción, la mascota en adopción debe tener todas sus vacunas al día
-		// La mascota en adopción tiene todas sus vacunas al día
-	#AnuncioProducto > 4
-	some aa: AnuncioProducto | #aa.productoAnunciado.Especiedestinada = 1
-
-	// Para cada anuncio de adopción, el propietario del anuncio debe ser el dueño de la mascota en adopción
-	some ap: AnuncioProducto | #ap.productoAnunciado.Especiedestinada > 1
-
+ //run ProductoVerificadoPorVeterinariosPred for 15
+pred unAnuncioPorProductoPred{
+  #AnuncioProducto > 4
+  some p: Producto | lone aP: AnuncioProducto | p in aP.productoAnunciado
 }
 
+//run unAnuncioPorProductoPred for 15
 
-pred amigos{
-	  // Para cada mascota, si tiene amigos, entonces debe tener al menos 2 gustos en común con cada uno de ellos
-  all m: Mascota | {
-	// Si la mascota tiene amigos
-	some m.amigos 
-	  
-	}
-
-  #Mascota >= 4
-}
 
 
 
 pred mascotaEnAdopcionSinVacunas {
   // Debe existir al menos un anuncio de adopción
-  some aa: AnuncioAdopcion | {
+  some aa: AnuncioAdopcion | 
     // La mascota en adopción NO tiene sus vacunas al día
-    no aa.mascotaAdopcion.vacunasTodas
-  }
+    #(aa.mascotaAdopcion.vacunasTodas)=0
   
-
-  // Para verificar que estamos intentando específicamente violar el fact de las vacunas
-  // y no otros facts del modelo
-  all m: Mascota | m !in m.amigos  // Cumple con MascotaNoAmigos
 }
 
 
@@ -360,35 +477,28 @@ pred cincoMascotasUnPropietario {
     all m: Mascota | m in p.dueño and p in m.mascota
   }
 }
-
-//run cincoMascotasUnPropietario for 15
-
-pred unPropietario {
-  -- Hay exactamente un propietario
-  one m: mascota | {
-    -- Hay exactamente 5 mascotas
-    #Propietario = 0
-    
-    
+pred MascotaMaxTresPublicacionesPorFechaPred{
+  one m: Mascota | {
+    // La mascota tiene exactamente 4 publicaciones en un día
+    one f: Fecha | 
+      #{ p: PublicacionNormal | p in m.publicacionesPropias and p.fechaPublicada = f } = 4
   }
 }
-
-// run unPropietario for 15
-
-
-
-// *********************************************** asserts para verificar facts *********************************************** 
+//run MascotaMaxTresPublicacionesPorFechaPred for 15
 
 
 
 // ************************************************ asserts ***********************************************
-assert MascotaConMasDeTresPublicacionesEnUnDia {
-	#PublicacionNormal > 4
+assert MascotaMaxTresPublicacionesPorFechaAssert {
+	 
+  //fechaActual.ValorDias = 100
   all m: Mascota| all f: Fecha | 
     #{ p: PublicacionNormal | p in m.publicacionesPropias and p.fechaPublicada = f } <= 3
 }
+check MascotaMaxTresPublicacionesPorFechaAssert for 15 but 8 Int
 
-check MascotaConMasDeTresPublicacionesEnUnDia for 15
+
+
 
 /**
  * assert que comprueba si la relación de amistad es bidireccional.
@@ -422,3 +532,15 @@ assert CantidadMaximaDeMascotasPorPropietarioAssert {
 assert CantidadMinimaDeGustosPorMascotaAssert {
    all m: Mascota | #m.gustos >= 3
  }
+
+ assert anuncios{
+	// Para cada anuncio de adopción, la mascota en adopción debe tener todas sus vacunas al día
+		// La mascota en adopción tiene todas sus vacunas al día
+	#AnuncioProducto > 4
+	some aa: AnuncioProducto | #aa.productoAnunciado.Especiedestinada = 1
+
+	// Para cada anuncio de adopción, el propietario del anuncio debe ser el dueño de la mascota en adopción
+	some ap: AnuncioProducto | #ap.productoAnunciado.Especiedestinada > 1
+}
+
+check anuncios for 15
