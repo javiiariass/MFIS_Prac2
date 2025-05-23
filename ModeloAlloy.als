@@ -401,11 +401,6 @@ fact AnuncioAgresivo {
 
 // Dos eventos no pueden tener la misma fecha si estan en la misma ubicacion
 
-fact EventosNoPuedenTenerMismaFecha {
-  all e1, e2: Evento | (e1 != e2 and e1.fechaEvento = e2.fechaEvento) implies ( e1.ubicacion != e2.ubicacion) or 
-   (e1 != e2 and e1.fechaEvento != e2.fechaEvento) implies (e1.ubicacion = e2.ubicacion)
-}
-
 fact EventosNoPuedenTenerMismaFechaYUbicacion {
   // Dos eventos diferentes no pueden tener al mismo tiempo misma fecha y ubicación
   all e1, e2: Evento | e1 != e2 implies 
